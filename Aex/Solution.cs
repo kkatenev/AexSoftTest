@@ -11,34 +11,32 @@ namespace Aex
             Console.WriteLine("Hello");
             while (true) { }
         }
+
         public List<CustomerViewModel> GetCustomers(DateTime beginDate, decimal sumAmount)
         {
             using (CustomersDbContext dbContext = new CustomersDbContext())
             {
-                var filteredOrders = dbContext.Orders
-                    .Where(order => order.Date >= beginDate && order.Amount > sumAmount)
-                    .ToList();
+                return dbContext.Customers
+                         .Join(
+                            dbContext.Orders.Where(order => order.Date >= beginDate && order.Amount > sumAmount),
+                            customer => customer.ID,
+                            order => order.CustomerID,
+                            (customer, order) => new CustomerViewModel
+                            {
+                                CustomerName = customer.Name,
+                                ManagerName = customer.Manager.Name,
+                                Amount = order.Amount
+                            }
+                        )
+                        .GroupBy(c => new { c.CustomerName, c.ManagerName })
+                        .Select(g => new CustomerViewModel
+                        {
+                            CustomerName = g.Key.CustomerName,
+                            ManagerName = g.Key.ManagerName,
+                            Amount = g.Sum(c => c.Amount)
+                        })
+                        .ToList();
 
-                var customerIds = filteredOrders.Select(order => order.CustomerID).Distinct();
-
-                var customers = dbContext.Customers
-                    .Include("Manager")                    .Where(customer => customerIds.Contains(customer.ID))
-                    .ToList();
-
-                var result = new List<CustomerViewModel>();
-                foreach (var customer in customers)
-                {
-                    var customerViewModel = new CustomerViewModel
-                    {
-                        CustomerName = customer.Name,
-                        ManagerName = customer.Manager?.Name,
-                        Amount = filteredOrders.Where(order => order.CustomerID == customer.ID).Sum(order => order.Amount)
-                    };
-
-                    result.Add(customerViewModel);
-                }
-
-                return result;
             }
         }
     }
